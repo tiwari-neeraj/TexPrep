@@ -460,7 +460,33 @@ function SetupScreen({ isd, onStart, onBack }) {
 // SCREEN 3: Practice Sheet
 function PracticeScreen({ isd, config, onFinish, onBack }) {
   const { grade, subject, mode, count } = config;
-  const [questions] = useState(()=>getQs(grade,subject,count));
+  const [questions, setQuestions] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const sb = getSupabase();
+      if (sb) {
+        try {
+          let { data } = await sb.from("question_bank").select("q,opts,ans,teks,exp")
+            .eq("grade", grade).eq("subject", subject).eq("mode", mode).limit(300);
+          if (!data || data.length < count) {
+            const r2 = await sb.from("question_bank").select("q,opts,ans,teks,exp")
+              .eq("grade", grade).eq("subject", subject).limit(300);
+            data = [...(data || []), ...(r2.data || [])];
+          }
+          if (alive && data && data.length >= count) {
+            const arr = [...data];
+            for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+            setQuestions(arr.slice(0, count));
+            return;
+          }
+        } catch (e) { /* fall back to bundled bank */ }
+      }
+      if (alive) setQuestions(getQs(grade, subject, count));
+    })();
+    return () => { alive = false; };
+  }, []);
   const [qi, setQi] = useState(0);
   const [selected, setSelected] = useState(null);
   const [answered, setAnswered] = useState(false);
@@ -472,12 +498,13 @@ function PracticeScreen({ isd, config, onFinish, onBack }) {
 
   const subj = SUBJECTS.find(s=>s.id===subject);
   const modeInfo = MODES.find(m=>m.id===mode);
-  const q = questions[qi];
+  const q = questions ? questions[qi] : null;
 
   useEffect(()=>{
+    if (!questions) return;
     timerRef.current = setInterval(()=>setElapsed(e=>e+1),1000);
     return ()=>clearInterval(timerRef.current);
-  },[]);
+  },[questions]);
 
   const fmt = s => `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
 
@@ -507,6 +534,13 @@ function PracticeScreen({ isd, config, onFinish, onBack }) {
     }
   },[answers,q,selected,qi,questions,elapsed,config,onFinish]);
 
+  if (!questions) return (
+    <div style={{...S.page,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh",gap:16}}>
+      <div style={{fontSize:54}}>📚</div>
+      <p style={{color:"#a78bfa",fontWeight:800,fontSize:17,margin:0}}>Building your practice sheet...</p>
+      <p style={{color:"#64748b",fontSize:13,margin:0}}>{subj?.label} · Grade {grade} · {modeInfo?.label}</p>
+    </div>
+  );
   if (!q) return null;
   const progress = (qi / questions.length) * 100;
 
