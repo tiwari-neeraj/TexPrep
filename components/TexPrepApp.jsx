@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { getSupabase } from "../lib/supabaseClient";
+import { AuthScreen, ForgotScreen, HistoryScreen, saveSession } from "./AuthScreens";
 
 // ── Inline data (ISD + Questions) ──────────────────────────────────────────
 
@@ -272,7 +274,7 @@ const S = {
 // ── Screens ────────────────────────────────────────────────────────────────
 
 // SCREEN 1: Welcome / Location
-function WelcomeScreen({ onNext }) {
+function WelcomeScreen({ onNext, user, onAuth, onHistory, onSignOut }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -284,10 +286,24 @@ function WelcomeScreen({ onNext }) {
   }, [query]);
 
   return (
-    <div style={{...S.page,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"20px 16px",minHeight:"100vh"}}>
+    <div style={{...S.page,position:"relative",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"20px 16px",minHeight:"100vh"}}>
+      {/* Account bar */}
+      <div style={{position:"absolute",top:14,right:14,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",justifyContent:"flex-end"}}>
+        {getSupabase() && (user ? (
+          <>
+            <span style={{fontSize:12,color:"#94a3b8",fontWeight:700}}>👋 {user.user_metadata?.display_name || user.email?.split("@")[0]}</span>
+            <button onClick={onHistory} style={{...S.btn,background:"rgba(99,102,241,0.2)",border:"1px solid rgba(99,102,241,0.4)",color:"#a78bfa",padding:"7px 14px",fontSize:12}}>📜 My History</button>
+            <button onClick={onSignOut} style={{...S.btn,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.1)",color:"#64748b",padding:"7px 12px",fontSize:12}}>Sign Out</button>
+          </>
+        ) : (
+          <button onClick={onAuth} style={{...S.btn,background:"rgba(99,102,241,0.2)",border:"1px solid rgba(99,102,241,0.4)",color:"#a78bfa",padding:"8px 16px",fontSize:13}}>🔐 Sign In / Sign Up</button>
+        ))}
+      </div>
       {/* Logo */}
       <div style={{textAlign:"center",marginBottom:36}}>
-        <div style={{fontSize:64,marginBottom:8}}>🤠</div>
+        <div style={{width:88,height:88,margin:"0 auto 14px",borderRadius:26,background:"linear-gradient(135deg,#6366f1 0%,#a855f7 55%,#ec4899 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 10px 36px rgba(139,92,246,0.45)"}}>
+          <svg width="52" height="52" viewBox="0 0 24 24" fill="white" aria-hidden="true"><path d="M12 2l2.9 6.26 6.6 1.01-5 4.87 1.18 6.88L12 17.77l-5.68 3.25L7.5 14.14l-5-4.87 6.6-1.01L12 2z"/></svg>
+        </div>
         <h1 style={{margin:0,fontSize:42,fontWeight:900,letterSpacing:-1,background:"linear-gradient(135deg,#a78bfa,#60a5fa,#34d399)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>TexPrep</h1>
         <p style={{margin:"8px 0 0",color:"#94a3b8",fontSize:17,fontWeight:600}}>Texas K–12 Practice · Free Forever</p>
         <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:12,flexWrap:"wrap"}}>
@@ -481,7 +497,7 @@ function PracticeScreen({ isd, config, onFinish, onBack }) {
 
   const handleNext = useCallback(()=>{
     stopSpeech(); setSpeaking(false);
-    const newAnswers = [...answers, { q: q.q, selected, correct: q.ans, teks: q.teks }];
+    const newAnswers = [...answers, { q: q.q, selected, correct: q.ans, teks: q.teks, opts: q.opts, exp: q.exp }];
     setAnswers(newAnswers);
     if (qi + 1 >= questions.length) {
       clearInterval(timerRef.current);
@@ -659,6 +675,7 @@ export default function App() {
   const [isd, setIsd] = useState(null);
   const [config, setConfig] = useState(null);
   const [result, setResult] = useState(null);
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
     const link = document.createElement("link");
@@ -667,9 +684,27 @@ export default function App() {
     document.head.appendChild(link);
   }, []);
 
-  if (screen === "welcome") return <WelcomeScreen onNext={isd=>{setIsd(isd);setScreen("setup");}}/>;
+  // Track Supabase auth session (no-op when Supabase isn't configured)
+  useEffect(() => {
+    const sb = getSupabase();
+    if (!sb) return;
+    sb.auth.getSession().then(({ data }) => setUser(data.session?.user || null));
+    const { data: sub } = sb.auth.onAuthStateChange((_e, session) => setUser(session?.user || null));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  const signOut = async () => {
+    const sb = getSupabase();
+    if (sb) await sb.auth.signOut();
+    setUser(null);
+  };
+
+  if (screen === "welcome") return <WelcomeScreen user={user} onAuth={()=>setScreen("auth")} onHistory={()=>setScreen("history")} onSignOut={signOut} onNext={isd=>{setIsd(isd);setScreen("setup");}}/>;
+  if (screen === "auth") return <AuthScreen onDone={u=>{setUser(u);setScreen("welcome");}} onBack={()=>setScreen("welcome")} onForgot={()=>setScreen("forgot")}/>;
+  if (screen === "forgot") return <ForgotScreen onBack={()=>setScreen("auth")}/>;
+  if (screen === "history") return <HistoryScreen user={user} onBack={()=>setScreen("welcome")}/>;
   if (screen === "setup") return <SetupScreen isd={isd} onStart={cfg=>{setConfig(cfg);setScreen("practice");}} onBack={()=>setScreen("welcome")}/>;
-  if (screen === "practice") return <PracticeScreen isd={isd} config={config} onFinish={res=>{setResult(res);setScreen("results");}} onBack={()=>setScreen("setup")}/>;
+  if (screen === "practice") return <PracticeScreen isd={isd} config={config} onFinish={res=>{setResult(res);setScreen("results");saveSession(user,res,isd);}} onBack={()=>setScreen("setup")}/>;
   if (screen === "results") return <ResultsScreen result={result} isd={isd} onRestart={()=>setScreen("practice")} onNewSession={()=>setScreen("setup")}/>;
   return null;
 }

@@ -44,6 +44,17 @@ export default function Privacy() {
         transmitted to us or stored.
       </p>
 
+      <h2 style={S.h2}>Optional Accounts</h2>
+      <p>
+        Creating an account is optional — the app works fully without one. If you choose
+        to create an account, we collect an email address, a display name, a role
+        (student or parent), and your practice session results (scores, answers, and
+        time taken) so you can review your history and mistakes. This data is stored
+        securely, is visible only to the account owner, and is never sold or shared
+        with third parties. Students under 13 should have a parent create the account.
+        You may request deletion of your account and all associated data at any time.
+      </p>
+
       <h2 style={S.h2}>Children's Privacy (COPPA)</h2>
       <p>
         TexPrep is designed for use by children with parental or teacher guidance.
