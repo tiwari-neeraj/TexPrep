@@ -19,7 +19,9 @@ const MODES = ["practice","staar","map","gt"];
 // States to generate content for. Start with TX; add states by setting the
 // GEN_STATES env/secret to e.g. "TX,FL,CA". Non-TX states use their own
 // adopted standards (Common Core-aligned where applicable) in the prompt.
-const STATES = (process.env.GEN_STATES || "TX").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
+const STATES = (process.env.GEN_STATES ||
+  "TX,AL,AK,AZ,AR,CA,CO,CT,DE,DC,FL,GA,HI,ID,IL,IN,IA,KS,KY,LA,ME,MD,MA,MI,MN,MS,MO,MT,NE,NV,NH,NJ,NM,NY,NC,ND,OH,OK,OR,PA,RI,SC,SD,TN,UT,VT,VA,WA,WV,WI,WY"
+  ).split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
 const STATE_STANDARDS = {
   TX: "Texas TEKS (Texas Essential Knowledge and Skills) standards",
 };

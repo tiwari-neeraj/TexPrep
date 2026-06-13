@@ -74,6 +74,11 @@ const US_STATES = [
 ];
 const stateName = (code) => (US_STATES.find(([c]) => c === code) || ["", code])[1];
 
+// LIVE states: all 50 + DC are live. Content fills in over time via the nightly
+// generator (GEN_STATES). States with a thin bank gracefully serve what exists.
+const LIVE_STATES = US_STATES.map(([code]) => code);
+const LIVE_STATE_OPTIONS = US_STATES.filter(([code]) => LIVE_STATES.includes(code));
+
 // Official state achievement test by state (2025-26). Source: state DOE sites.
 // Used to label the test-prep mode correctly per state. Default fallback: "State Test Prep".
 const STATE_TEST = {
@@ -389,7 +394,7 @@ function WelcomeScreen({ onNext, user, onAuth, onHistory, onSignOut }) {
         <p style={{margin:"0 0 14px",color:"#94a3b8",fontSize:14}}>Pick your state, then search by city, district name, or ZIP</p>
         <select value={stateCode} onChange={e=>{setStateCode(e.target.value);setSelected(null);setResults([]);}}
           style={{width:"100%",background:"rgba(255,255,255,0.08)",border:"1.5px solid rgba(255,255,255,0.15)",borderRadius:12,padding:"12px 14px",color:"#f1f5f9",fontSize:14,fontFamily:"inherit",boxSizing:"border-box",outline:"none",marginBottom:10,appearance:"auto"}}>
-          {US_STATES.map(([code,name])=>(<option key={code} value={code} style={{background:"#1e1b4b",color:"#f1f5f9"}}>{name}</option>))}
+          {LIVE_STATE_OPTIONS.map(([code,name])=>(<option key={code} value={code} style={{background:"#1e1b4b",color:"#f1f5f9"}}>{name}</option>))}
         </select>
 
         <div style={{position:"relative"}}>
@@ -548,30 +553,41 @@ function SetupScreen({ isd, onStart, onBack }) {
 function PracticeScreen({ isd, config, onFinish, onBack }) {
   const { grade, subject, mode, count } = config;
   const [questions, setQuestions] = useState(null);
+  const [short, setShort] = useState(0);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       const sb = getSupabase();
+      const st = (isd && isd.state) || "TX";
       if (sb) {
         try {
-          const st = (isd && isd.state) || "TX";
           let { data } = await sb.from("question_bank").select("q,opts,ans,teks,exp")
-            .eq("grade", grade).eq("subject", subject).eq("mode", mode).eq("state", st).limit(300);
-          if (!data || data.length < count) {
+            .eq("grade", grade).eq("subject", subject).eq("mode", mode).eq("state", st).limit(400);
+          let pool = data || [];
+          if (pool.length < count) {
             const r2 = await sb.from("question_bank").select("q,opts,ans,teks,exp")
-              .eq("grade", grade).eq("subject", subject).eq("state", st).limit(300);
-            data = [...(data || []), ...(r2.data || [])];
+              .eq("grade", grade).eq("subject", subject).eq("state", st).limit(400);
+            // merge + dedupe by question text
+            const seen = new Set(pool.map((x) => x.q));
+            for (const row of (r2.data || [])) { if (!seen.has(row.q)) { pool.push(row); seen.add(row.q); } }
           }
-          if (alive && data && data.length >= count) {
-            const arr = [...data];
+          if (alive && pool.length > 0) {
+            const arr = [...pool];
             for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
-            setQuestions(arr.slice(0, count));
+            const served = arr.slice(0, count);
+            if (served.length < count) setShort(count - served.length);
+            setQuestions(served);
             return;
           }
-        } catch (e) { /* fall back to bundled bank */ }
+        } catch (e) { /* fall through */ }
       }
-      if (alive) setQuestions(getQs(grade, subject, count));
+      // Fallback: bundled questions exist for Texas only. Other states with an empty
+      // bank show a friendly "content coming soon" state instead of wrong-state content.
+      if (alive) {
+        if (st === "TX") setQuestions(getQs(grade, subject, count));
+        else setQuestions([]);
+      }
     })();
     return () => { alive = false; };
   }, []);
@@ -629,6 +645,16 @@ function PracticeScreen({ isd, config, onFinish, onBack }) {
       <p style={{color:"#64748b",fontSize:13,margin:0}}>{subj?.label} · Grade {grade} · {modeInfo?.label}</p>
     </div>
   );
+  if (questions.length === 0) return (
+    <div style={{...S.page,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh",gap:14,padding:"20px 24px",textAlign:"center"}}>
+      <div style={{fontSize:56}}>🚧</div>
+      <p style={{color:"#f1f5f9",fontWeight:800,fontSize:19,margin:0}}>Questions coming soon!</p>
+      <p style={{color:"#94a3b8",fontSize:14,margin:0,maxWidth:340,lineHeight:1.6}}>
+        We're still building the {stateName(isd?.state||"TX")} question bank for {subj?.label}, Grade {grade}. Fresh questions are added every day — please check back soon, or try another subject or grade.
+      </p>
+      <button onClick={onBack} style={{...S.btn,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",color:"#fff",padding:"13px 28px",fontSize:15,marginTop:8}}>← Choose Another</button>
+    </div>
+  );
   if (!q) return null;
   const progress = (qi / questions.length) * 100;
 
@@ -649,7 +675,7 @@ function PracticeScreen({ isd, config, onFinish, onBack }) {
         <div style={{background:"rgba(255,255,255,0.08)",borderRadius:8,height:8,marginBottom:20,overflow:"hidden"}}>
           <div style={{height:"100%",background:"linear-gradient(90deg,#6366f1,#8b5cf6,#ec4899)",borderRadius:8,width:`${progress}%`,transition:"width 0.4s ease"}}/>
         </div>
-        <div style={{textAlign:"center",fontSize:13,color:"#64748b",marginBottom:20}}>Question {qi+1} of {questions.length}</div>
+        <div style={{textAlign:"center",fontSize:13,color:"#64748b",marginBottom:20}}>Question {qi+1} of {questions.length}{short>0?` · more being added soon`:""}</div>
 
         {/* Question Card */}
         <div style={{...S.card,marginBottom:16}}>
