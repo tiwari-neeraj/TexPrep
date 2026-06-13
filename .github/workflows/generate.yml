@@ -2,7 +2,8 @@ name: Generate Questions
 
 on:
   schedule:
-    - cron: "0 */3 * * *"   # every 3 hours — steady fill within free-tier limits
+    # ~9 runs/day, spaced ~2.5h apart. 9 runs x 100 calls = 900/day, under Gemini's 1,000/day cap.
+    - cron: "0 9,11,14,16,19,21,0,3,6 * * *"
   workflow_dispatch: {}    # adds a manual "Run workflow" button
 
 jobs:
