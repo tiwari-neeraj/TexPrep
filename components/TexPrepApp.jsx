@@ -248,6 +248,21 @@ const MODES = [
   {id:"gt",label:"Gifted & Talented",icon:"🏆",desc:"Advanced challenges",color:"#7c3aed"},
 ];
 
+// Official STAAR test lengths from TEA / ESC Region 13 blueprints (2024-26).
+// STAAR is statewide — identical in every ISD. High school grades map to EOC tests
+// (Algebra I, English I/II, Biology, U.S. History). Update here if TEA revises blueprints.
+const STAAR_LEN = {
+  math:    { "3":30, "4":32, "5":34, "6":36, "7":38, "8":40, "9":45, "10":45, "11":45, "12":45 },
+  ela:     { "3":39, "4":40, "5":41, "6":41, "7":42, "8":43, "9":47, "10":47, "11":47, "12":47 },
+  science: { "5":32, "8":38, "9":45, "10":45, "11":45, "12":45 },
+  social:  { "8":44, "9":64, "10":64, "11":64, "12":64 },
+};
+function officialLen(grade, subject, mode) {
+  if (mode === "map") return 40; // NWEA MAP Growth sessions run ~40 questions
+  if (mode === "staar") return (STAAR_LEN[subject] || {})[grade] || null;
+  return null;
+}
+
 // ── Text-to-Speech ─────────────────────────────────────────────────────────
 
 function speak(text, onEnd) {
@@ -437,14 +452,21 @@ function SetupScreen({ isd, onStart, onBack }) {
         {/* Question Count */}
         <div style={{...S.card,marginBottom:20}}>
           <h3 style={{margin:"0 0 12px",fontSize:15,fontWeight:800,color:"#fbbf24",textTransform:"uppercase",letterSpacing:1}}>Number of Questions</h3>
-          <div style={{display:"flex",gap:8}}>
-            {[5,10,15].map(n=>(
+          {(() => { const n = grade && subject && mode ? officialLen(grade, subject, mode) : null; return n ? (
+            <button onClick={()=>setCount(n)}
+              style={{...S.btn,width:"100%",marginBottom:10,padding:"14px 8px",fontSize:15,background:count===n?"linear-gradient(135deg,#e11d48,#be123c)":"rgba(225,29,72,0.12)",color:count===n?"#fff":"#fda4af",border:count===n?"none":"1.5px solid rgba(225,29,72,0.45)"}}>
+              🎯 Official Test Length — {n} Questions {count===n?"✓":""}
+            </button>
+          ) : null; })()}
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {[5,10,15,20,30].map(n=>(
               <button key={n} onClick={()=>setCount(n)}
-                style={{...S.btn,flex:1,padding:"12px 4px",fontSize:15,background:count===n?"linear-gradient(135deg,#f59e0b,#d97706)":"rgba(255,255,255,0.06)",color:count===n?"#fff":"#94a3b8",border:count===n?"none":"1px solid rgba(255,255,255,0.08)"}}>
+                style={{...S.btn,flex:1,minWidth:86,padding:"12px 4px",fontSize:15,background:count===n?"linear-gradient(135deg,#f59e0b,#d97706)":"rgba(255,255,255,0.06)",color:count===n?"#fff":"#94a3b8",border:count===n?"none":"1px solid rgba(255,255,255,0.08)"}}>
                 {n} Qs
               </button>
             ))}
           </div>
+          <p style={{margin:"10px 0 0",fontSize:12,color:"#64748b"}}>💡 For STAAR and MAP modes, "Official Test Length" matches the real Texas test blueprint for your grade & subject — the most authentic practice experience.</p>
         </div>
 
         <button
