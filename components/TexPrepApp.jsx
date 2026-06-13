@@ -74,6 +74,22 @@ const US_STATES = [
 ];
 const stateName = (code) => (US_STATES.find(([c]) => c === code) || ["", code])[1];
 
+// Official state achievement test by state (2025-26). Source: state DOE sites.
+// Used to label the test-prep mode correctly per state. Default fallback: "State Test Prep".
+const STATE_TEST = {
+  TX:"STAAR", FL:"FAST", CA:"CAASPP", NY:"NYS Tests", MA:"MCAS", GA:"Georgia Milestones",
+  OH:"Ohio State Tests", IL:"IAR", PA:"PSSA", NC:"EOG/EOC", MI:"M-STEP", NJ:"NJSLA",
+  VA:"SOL", AZ:"AzM2", IN:"ILEARN", TN:"TNReady", MO:"MAP", WI:"Forward Exam",
+  CO:"CMAS", MD:"MCAP", MN:"MCA", LA:"LEAP", AL:"ACAP", SC:"SC READY", KY:"KSA",
+  OK:"OSTP", CT:"Smarter Balanced", OR:"OSAS", UT:"RISE", IA:"ISASP", AR:"ATLAS",
+  MS:"MAAP", KS:"KAP", NV:"Smarter Balanced", NM:"NM-MSSA", WA:"Smarter Balanced",
+  WV:"WVGSA", NE:"NSCAS", ID:"ISAT", NH:"NH SAS", ME:"MEA", HI:"SBA", RI:"RICAS",
+  MT:"Smarter Balanced", DE:"DeSSA", SD:"Smarter Balanced", ND:"ND A+", AK:"AK STAR",
+  VT:"Smarter Balanced", WY:"WY-TOPP", DC:"DC CAPE",
+};
+const stateTestName = (code) => STATE_TEST[code] || "State Test";
+
+
 // ── Question Bank ──────────────────────────────────────────────────────────
 
 const QB = {
@@ -272,7 +288,14 @@ const STAAR_LEN = {
 };
 function officialLen(grade, subject, mode, state) {
   if (mode === "map") return 40; // NWEA MAP Growth sessions run ~40 questions (nationwide)
-  if (mode === "staar" && (!state || state === "TX")) return (STAAR_LEN[subject] || {})[grade] || null;
+  if (mode === "staar") {
+    if (!state || state === "TX") return (STAAR_LEN[subject] || {})[grade] || null;
+    // Other states: federal law tests math + reading in grades 3-8 & once in HS; science in ~2 grades.
+    const g = parseInt(grade, 10);
+    if ((subject === "math" || subject === "ela") && ((g >= 3 && g <= 8) || ["9","10","11"].includes(grade))) return 40;
+    if (subject === "science" && (grade === "5" || grade === "8" || grade === "11")) return 40;
+    return null;
+  }
   return null;
 }
 
@@ -474,14 +497,20 @@ function SetupScreen({ isd, onStart, onBack }) {
         <div style={{...S.card,marginBottom:16}}>
           <h3 style={{margin:"0 0 14px",fontSize:15,fontWeight:800,color:"#60a5fa",textTransform:"uppercase",letterSpacing:1}}>Practice Mode</h3>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-            {MODES.map(m=>(
+            {MODES.map(m=>{
+              const st = isd?.state || "TX";
+              const label = m.id === "staar" ? `${stateTestName(st)} Prep` : m.label;
+              const desc = m.id === "staar" ? `${stateName(st)} state test practice`
+                : m.id === "practice" ? (st === "TX" ? "TEKS-aligned questions" : "Standards-aligned questions")
+                : m.desc;
+              return (
               <button key={m.id} onClick={()=>setMode(m.id)}
                 style={{...S.btn,padding:"12px 10px",background:mode===m.id?m.color:"rgba(255,255,255,0.05)",color:mode===m.id?"#fff":"#94a3b8",border:mode===m.id?"none":"1px solid rgba(255,255,255,0.08)",textAlign:"left",transform:mode===m.id?"scale(1.02)":"scale(1)"}}>
                 <div style={{fontSize:20,marginBottom:4}}>{m.icon}</div>
-                <div style={{fontSize:13,fontWeight:800}}>{m.label}</div>
-                <div style={{fontSize:11,opacity:0.8,marginTop:2}}>{m.desc}</div>
+                <div style={{fontSize:13,fontWeight:800}}>{label}</div>
+                <div style={{fontSize:11,opacity:0.8,marginTop:2}}>{desc}</div>
               </button>
-            ))}
+            );})}
           </div>
         </div>
 
@@ -502,7 +531,7 @@ function SetupScreen({ isd, onStart, onBack }) {
               </button>
             ))}
           </div>
-          <p style={{margin:"10px 0 0",fontSize:12,color:"#64748b"}}>💡 For STAAR and MAP modes, "Official Test Length" matches the real Texas test blueprint for your grade & subject — the most authentic practice experience.</p>
+          <p style={{margin:"10px 0 0",fontSize:12,color:"#64748b"}}>💡 "Official Test Length" matches the real state test blueprint for your grade & subject — the most authentic practice experience.</p>
         </div>
 
         <button
@@ -611,7 +640,7 @@ function PracticeScreen({ isd, config, onFinish, onBack }) {
           <button onClick={()=>{stopSpeech();onBack();}} style={{...S.btn,background:"rgba(255,255,255,0.08)",color:"#94a3b8",padding:"8px 14px",fontSize:12}}>✕ Exit</button>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <span style={{background:"rgba(99,102,241,0.2)",border:"1px solid rgba(99,102,241,0.4)",borderRadius:20,padding:"6px 14px",fontSize:13,fontWeight:700,color:"#a78bfa"}}>{subj?.icon} {subj?.label}</span>
-            <span style={{background:"rgba(99,102,241,0.2)",border:"1px solid rgba(99,102,241,0.4)",borderRadius:20,padding:"6px 14px",fontSize:13,fontWeight:700,color:"#a78bfa"}}>{modeInfo?.icon} {modeInfo?.label}</span>
+            <span style={{background:"rgba(99,102,241,0.2)",border:"1px solid rgba(99,102,241,0.4)",borderRadius:20,padding:"6px 14px",fontSize:13,fontWeight:700,color:"#a78bfa"}}>{modeInfo?.icon} {mode==="staar"?`${stateTestName(isd?.state||"TX")} Prep`:modeInfo?.label}</span>
           </div>
           <div style={{background:"rgba(15,23,42,0.8)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:20,padding:"6px 16px",fontFamily:"'Courier New',monospace",fontSize:18,fontWeight:900,color:"#34d399",letterSpacing:2}}>⏱ {fmt(elapsed)}</div>
         </div>
