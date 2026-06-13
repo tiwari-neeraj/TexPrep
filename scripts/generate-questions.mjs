@@ -32,7 +32,7 @@ function standardsFor(state) {
 }
 
 const TARGET_PER_COMBO = 80;   // questions we want per grade+subject+mode (covers official test lengths up to 64)
-const MAX_CALLS_PER_RUN = 15; // Gemini free tier is ~20/min and limited/day; stay safe
+const MAX_CALLS_PER_RUN = 100; // 100 calls/run × ~9 runs/day ≈ 900/day, under Gemini's 1,000/day cap
 const QUESTIONS_PER_CALL = 10;
 
 const SUBJECT_NAMES = { math: "Mathematics", ela: "Reading & English Language Arts", science: "Science", social: "Social Studies" };
@@ -147,7 +147,7 @@ async function main() {
     } else {
       console.warn(`No valid questions parsed for ${w.st}/${w.g}/${w.s}/${w.m}`);
     }
-    await sleep(7000); // ~8/min — safely under Gemini's ~20/min free-tier limit
+    await sleep(5000); // 12 calls/min — safely under Gemini's 15/min free-tier limit
   }
   console.log(`Done. ${calls} AI calls, ${inserted} questions inserted.`);
 }
