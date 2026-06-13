@@ -19,9 +19,11 @@ const MODES = ["practice","staar","map","gt"];
 // States to generate content for. Start with TX; add states by setting the
 // GEN_STATES env/secret to e.g. "TX,FL,CA". Non-TX states use their own
 // adopted standards (Common Core-aligned where applicable) in the prompt.
-const STATES = (process.env.GEN_STATES ||
-  "TX,AL,AK,AZ,AR,CA,CO,CT,DE,DC,FL,GA,HI,ID,IL,IN,IA,KS,KY,LA,ME,MD,MA,MI,MN,MS,MO,MT,NE,NV,NH,NJ,NM,NY,NC,ND,OH,OK,OR,PA,RI,SC,SD,TN,UT,VT,VA,WA,WV,WI,WY"
-  ).split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
+// STATE GENERATION SWITCH: which states the nightly generator builds content for.
+// Currently Texas-only so TX fills to full depth fast. To build all states later,
+// set GEN_STATES secret to the full list (or change this default) — see README.
+const STATES = (process.env.GEN_STATES || "TX")
+  .split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
 const STATE_STANDARDS = {
   TX: "Texas TEKS (Texas Essential Knowledge and Skills) standards",
 };
@@ -30,7 +32,7 @@ function standardsFor(state) {
 }
 
 const TARGET_PER_COMBO = 80;   // questions we want per grade+subject+mode (covers official test lengths up to 64)
-const MAX_CALLS_PER_RUN = 50;  // stay well within free-tier daily limits
+const MAX_CALLS_PER_RUN = 200; // Texas-only focus; Gemini free tier allows 1,000/day
 const QUESTIONS_PER_CALL = 10;
 
 const SUBJECT_NAMES = { math: "Mathematics", ela: "Reading & English Language Arts", science: "Science", social: "Social Studies" };

@@ -74,9 +74,17 @@ const US_STATES = [
 ];
 const stateName = (code) => (US_STATES.find(([c]) => c === code) || ["", code])[1];
 
-// LIVE states: all 50 + DC are live. Content fills in over time via the nightly
-// generator (GEN_STATES). States with a thin bank gracefully serve what exists.
-const LIVE_STATES = US_STATES.map(([code]) => code);
+// ── STATE VISIBILITY SWITCH ──────────────────────────────────────────────
+// All 50 states + DC are fully built and dormant. To control which states are
+// VISIBLE/SELECTABLE to users, edit LIVE_STATES below. Nothing is deleted —
+// hidden states keep their code, districts, and any generated content.
+//
+//   Texas-only (current):   const LIVE_STATES = ["TX"];
+//   All states (future):    const LIVE_STATES = US_STATES.map(([code]) => code);
+//
+// When you flip to all states, also remove the GEN_STATES secret in GitHub so
+// the nightly generator resumes building every state.
+const LIVE_STATES = ["TX"];
 const LIVE_STATE_OPTIONS = US_STATES.filter(([code]) => LIVE_STATES.includes(code));
 
 // Official state achievement test by state (2025-26). Source: state DOE sites.
