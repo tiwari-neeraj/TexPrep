@@ -16,7 +16,7 @@ const GRADES = ["K","1","2","3","4","5","6","7","8","9","10","11","12"];
 const SUBJECTS = ["math","ela","science","social"];
 const MODES = ["practice","staar","map","gt"];
 
-const TARGET_PER_COMBO = 40;   // questions we want per grade+subject+mode
+const TARGET_PER_COMBO = 80;   // questions we want per grade+subject+mode (covers official test lengths up to 64)
 const MAX_CALLS_PER_RUN = 50;  // stay well within free-tier daily limits
 const QUESTIONS_PER_CALL = 10;
 
