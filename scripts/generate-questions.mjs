@@ -16,6 +16,17 @@ const GRADES = ["K","1","2","3","4","5","6","7","8","9","10","11","12"];
 const SUBJECTS = ["math","ela","science","social"];
 const MODES = ["practice","staar","map","gt"];
 
+// States to generate content for. Start with TX; add states by setting the
+// GEN_STATES env/secret to e.g. "TX,FL,CA". Non-TX states use their own
+// adopted standards (Common Core-aligned where applicable) in the prompt.
+const STATES = (process.env.GEN_STATES || "TX").split(",").map((s) => s.trim().toUpperCase()).filter(Boolean);
+const STATE_STANDARDS = {
+  TX: "Texas TEKS (Texas Essential Knowledge and Skills) standards",
+};
+function standardsFor(state) {
+  return STATE_STANDARDS[state] || `the academic standards officially adopted by the U.S. state with postal code ${state} (Common Core State Standards for math/ELA and NGSS for science where that state has adopted them)`;
+}
+
 const TARGET_PER_COMBO = 80;   // questions we want per grade+subject+mode (covers official test lengths up to 64)
 const MAX_CALLS_PER_RUN = 50;  // stay well within free-tier daily limits
 const QUESTIONS_PER_CALL = 10;
@@ -30,9 +41,9 @@ const MODE_STYLE = {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function sbCount(grade, subject, mode) {
+async function sbCount(grade, subject, mode, state) {
   const res = await fetch(
-    `${SB_URL}/rest/v1/question_bank?grade=eq.${grade}&subject=eq.${subject}&mode=eq.${mode}&select=id`,
+    `${SB_URL}/rest/v1/question_bank?grade=eq.${grade}&subject=eq.${subject}&mode=eq.${mode}&state=eq.${state}&select=id`,
     { headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}`, Prefer: "count=exact", Range: "0-0" } }
   );
   const range = res.headers.get("content-range") || "0/0";
@@ -48,15 +59,15 @@ async function sbInsert(rows) {
   if (!res.ok) throw new Error(`Supabase insert failed: ${res.status} ${await res.text()}`);
 }
 
-function buildPrompt(grade, subject, mode) {
+function buildPrompt(grade, subject, mode, state) {
   const gradeLabel = grade === "K" ? "Kindergarten" : `Grade ${grade}`;
-  return `You are an expert Texas K-12 curriculum writer. Generate ${QUESTIONS_PER_CALL} ORIGINAL multiple-choice questions for ${gradeLabel} ${SUBJECT_NAMES[subject]}, aligned to Texas TEKS standards. Style: ${MODE_STYLE[mode]}.
+  return `You are an expert U.S. K-12 curriculum writer. Generate ${QUESTIONS_PER_CALL} ORIGINAL multiple-choice questions for ${gradeLabel} ${SUBJECT_NAMES[subject]}, aligned to ${standardsFor(state)}. Style: ${MODE_STYLE[mode]}.
 
 STRICT RULES:
 - 100% original content. NEVER reproduce questions from STAAR, MAP, textbooks, or any existing source.
 - Age-appropriate language and difficulty for ${gradeLabel}.
 - Exactly 4 answer options per question, one correct.
-- Include the most relevant TEKS standard code (e.g., "3.4A").
+- Include the most relevant standard code from the named framework (e.g., "3.4A" for TEKS, "3.OA.A.1" for Common Core).
 - Include a clear 1-2 sentence explanation of the correct answer.
 - Vary the topics across the subject's TEKS strands.
 - Respond with ONLY a JSON array, no markdown, no backticks, no preamble. Schema:
@@ -85,7 +96,7 @@ async function callGroq(prompt) {
   return data.choices?.[0]?.message?.content || "";
 }
 
-function parseQuestions(text, grade, subject, mode) {
+function parseQuestions(text, grade, subject, mode, state) {
   const clean = text.replace(/```json|```/g, "").trim();
   const start = clean.indexOf("["), end = clean.lastIndexOf("]");
   if (start === -1 || end === -1) return [];
@@ -95,18 +106,18 @@ function parseQuestions(text, grade, subject, mode) {
   return arr
     .filter((x) => x && typeof x.q === "string" && Array.isArray(x.opts) && x.opts.length === 4 &&
       Number.isInteger(x.ans) && x.ans >= 0 && x.ans <= 3 && typeof x.exp === "string")
-    .map((x) => ({ grade, subject, mode, q: x.q.trim(), opts: x.opts.map(String), ans: x.ans, teks: String(x.teks || "").slice(0, 12), exp: x.exp.trim() }));
+    .map((x) => ({ grade, subject, mode, state, q: x.q.trim(), opts: x.opts.map(String), ans: x.ans, teks: String(x.teks || "").slice(0, 12), exp: x.exp.trim() }));
 }
 
 async function main() {
   // Build the work list: combos below target, lowest coverage first
   const work = [];
-  for (const g of GRADES) for (const s of SUBJECTS) for (const m of MODES) work.push({ g, s, m });
+  for (const st of STATES) for (const g of GRADES) for (const s of SUBJECTS) for (const m of MODES) work.push({ st, g, s, m });
 
   console.log("Checking current coverage...");
   const counts = [];
   for (const w of work) {
-    const c = await sbCount(w.g, w.s, w.m);
+    const c = await sbCount(w.g, w.s, w.m, w.st);
     if (c < TARGET_PER_COMBO) counts.push({ ...w, c });
   }
   counts.sort((a, b) => a.c - b.c);
@@ -115,22 +126,22 @@ async function main() {
   let calls = 0, inserted = 0;
   for (const w of counts) {
     if (calls >= MAX_CALLS_PER_RUN) break;
-    const prompt = buildPrompt(w.g, w.s, w.m);
+    const prompt = buildPrompt(w.g, w.s, w.m, w.st);
     let text = "";
     try {
       if (GEMINI_KEY) { text = await callGemini(prompt); }
       else { text = await callGroq(prompt); }
     } catch (e) {
-      console.warn(`Gemini failed for ${w.g}/${w.s}/${w.m}: ${e.message}`);
+      console.warn(`Gemini failed for ${w.st}/${w.g}/${w.s}/${w.m}: ${e.message}`);
       if (GROQ_KEY) { try { text = await callGroq(prompt); } catch (e2) { console.warn(`Groq also failed: ${e2.message}`); } }
     }
     calls++;
-    const rows = parseQuestions(text, w.g, w.s, w.m);
+    const rows = parseQuestions(text, w.g, w.s, w.m, w.st);
     if (rows.length) {
-      try { await sbInsert(rows); inserted += rows.length; console.log(`+${rows.length}  ${w.g}/${w.s}/${w.m} (had ${w.c})`); }
+      try { await sbInsert(rows); inserted += rows.length; console.log(`+${rows.length}  ${w.st}/${w.g}/${w.s}/${w.m} (had ${w.c})`); }
       catch (e) { console.warn(`Insert failed: ${e.message}`); }
     } else {
-      console.warn(`No valid questions parsed for ${w.g}/${w.s}/${w.m}`);
+      console.warn(`No valid questions parsed for ${w.st}/${w.g}/${w.s}/${w.m}`);
     }
     await sleep(4500); // respect 15 requests/minute free-tier limit
   }

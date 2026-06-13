@@ -61,6 +61,19 @@ function searchISD(query) {
   ).slice(0, 6);
 }
 
+const US_STATES = [
+  ["TX","Texas"],["AL","Alabama"],["AK","Alaska"],["AZ","Arizona"],["AR","Arkansas"],["CA","California"],
+  ["CO","Colorado"],["CT","Connecticut"],["DE","Delaware"],["DC","Washington DC"],["FL","Florida"],["GA","Georgia"],
+  ["HI","Hawaii"],["ID","Idaho"],["IL","Illinois"],["IN","Indiana"],["IA","Iowa"],["KS","Kansas"],["KY","Kentucky"],
+  ["LA","Louisiana"],["ME","Maine"],["MD","Maryland"],["MA","Massachusetts"],["MI","Michigan"],["MN","Minnesota"],
+  ["MS","Mississippi"],["MO","Missouri"],["MT","Montana"],["NE","Nebraska"],["NV","Nevada"],["NH","New Hampshire"],
+  ["NJ","New Jersey"],["NM","New Mexico"],["NY","New York"],["NC","North Carolina"],["ND","North Dakota"],
+  ["OH","Ohio"],["OK","Oklahoma"],["OR","Oregon"],["PA","Pennsylvania"],["RI","Rhode Island"],["SC","South Carolina"],
+  ["SD","South Dakota"],["TN","Tennessee"],["UT","Utah"],["VT","Vermont"],["VA","Virginia"],["WA","Washington"],
+  ["WV","West Virginia"],["WI","Wisconsin"],["WY","Wyoming"]
+];
+const stateName = (code) => (US_STATES.find(([c]) => c === code) || ["", code])[1];
+
 // ── Question Bank ──────────────────────────────────────────────────────────
 
 const QB = {
@@ -257,9 +270,9 @@ const STAAR_LEN = {
   science: { "5":32, "8":38, "9":45, "10":45, "11":45, "12":45 },
   social:  { "8":44, "9":64, "10":64, "11":64, "12":64 },
 };
-function officialLen(grade, subject, mode) {
-  if (mode === "map") return 40; // NWEA MAP Growth sessions run ~40 questions
-  if (mode === "staar") return (STAAR_LEN[subject] || {})[grade] || null;
+function officialLen(grade, subject, mode, state) {
+  if (mode === "map") return 40; // NWEA MAP Growth sessions run ~40 questions (nationwide)
+  if (mode === "staar" && (!state || state === "TX")) return (STAAR_LEN[subject] || {})[grade] || null;
   return null;
 }
 
@@ -294,11 +307,30 @@ function WelcomeScreen({ onNext, user, onAuth, onHistory, onSignOut }) {
   const [results, setResults] = useState([]);
   const [selected, setSelected] = useState(null);
   const [touched, setTouched] = useState(false);
+  const [stateCode, setStateCode] = useState("TX");
 
   useEffect(() => {
-    if (query.length >= 2) setResults(searchISD(query));
-    else setResults([]);
-  }, [query]);
+    let alive = true;
+    (async () => {
+      if (query.length < 2) { setResults([]); return; }
+      const sb = getSupabase();
+      if (sb) {
+        try {
+          let req = sb.from("districts").select("name,city,state").eq("state", stateCode).limit(8);
+          const zq = query.trim();
+          if (/^\d{3,5}$/.test(zq)) req = req.contains("zips", [zq]);
+          else req = req.or(`name.ilike.%${zq}%,city.ilike.%${zq}%`);
+          const { data } = await req;
+          if (alive && data && data.length) {
+            setResults(data.map((d, i) => ({ id: `${d.state}-${i}-${d.name}`, name: d.name, city: d.city, state: d.state })));
+            return;
+          }
+        } catch (e) { /* fall through to bundled data */ }
+      }
+      if (alive) setResults(stateCode === "TX" ? searchISD(query) : []);
+    })();
+    return () => { alive = false; };
+  }, [query, stateCode]);
 
   return (
     <div style={{...S.page,position:"relative",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"20px 16px",minHeight:"100vh"}}>
@@ -320,7 +352,7 @@ function WelcomeScreen({ onNext, user, onAuth, onHistory, onSignOut }) {
           <svg width="52" height="52" viewBox="0 0 24 24" fill="white" aria-hidden="true"><path d="M12 2l2.9 6.26 6.6 1.01-5 4.87 1.18 6.88L12 17.77l-5.68 3.25L7.5 14.14l-5-4.87 6.6-1.01L12 2z"/></svg>
         </div>
         <h1 style={{margin:0,fontSize:42,fontWeight:900,letterSpacing:-1,background:"linear-gradient(135deg,#a78bfa,#60a5fa,#34d399)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>TexPrep</h1>
-        <p style={{margin:"8px 0 0",color:"#94a3b8",fontSize:17,fontWeight:600}}>Texas K–12 Practice · Free Forever</p>
+        <p style={{margin:"8px 0 0",color:"#94a3b8",fontSize:17,fontWeight:600}}>K–12 Practice · Texas + All States · Free</p>
         <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:12,flexWrap:"wrap"}}>
           {["TEKS-Aligned","STAAR Prep","MAP Prep","G&T Mode"].map(t=>(
             <span key={t} style={{background:"rgba(99,102,241,0.2)",border:"1px solid rgba(99,102,241,0.4)",borderRadius:20,padding:"4px 12px",fontSize:12,color:"#a78bfa",fontWeight:700}}>{t}</span>
@@ -331,7 +363,11 @@ function WelcomeScreen({ onNext, user, onAuth, onHistory, onSignOut }) {
       {/* ISD Search Card */}
       <div style={{...S.card,width:"100%",maxWidth:460}}>
         <h2 style={{margin:"0 0 6px",fontSize:20,fontWeight:800,color:"#f1f5f9"}}>Find Your School District</h2>
-        <p style={{margin:"0 0 20px",color:"#94a3b8",fontSize:14}}>Enter your city name or ZIP code</p>
+        <p style={{margin:"0 0 14px",color:"#94a3b8",fontSize:14}}>Pick your state, then search by city, district name, or ZIP</p>
+        <select value={stateCode} onChange={e=>{setStateCode(e.target.value);setSelected(null);setResults([]);}}
+          style={{width:"100%",background:"rgba(255,255,255,0.08)",border:"1.5px solid rgba(255,255,255,0.15)",borderRadius:12,padding:"12px 14px",color:"#f1f5f9",fontSize:14,fontFamily:"inherit",boxSizing:"border-box",outline:"none",marginBottom:10,appearance:"auto"}}>
+          {US_STATES.map(([code,name])=>(<option key={code} value={code} style={{background:"#1e1b4b",color:"#f1f5f9"}}>{name}</option>))}
+        </select>
 
         <div style={{position:"relative"}}>
           <div style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)",fontSize:20}}>🔍</div>
@@ -351,7 +387,7 @@ function WelcomeScreen({ onNext, user, onAuth, onHistory, onSignOut }) {
                 onMouseEnter={e=>e.currentTarget.style.background="rgba(99,102,241,0.2)"}
                 onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                 <div style={{fontWeight:700,fontSize:14,color:"#f1f5f9"}}>{isd.name}</div>
-                <div style={{fontSize:12,color:"#64748b",marginTop:2}}>{isd.city} · {isd.zips.length} ZIP codes</div>
+                <div style={{fontSize:12,color:"#64748b",marginTop:2}}>{isd.city ? isd.city + ", " : ""}{stateName(isd.state || "TX")}</div>
               </div>
             ))}
           </div>
@@ -362,7 +398,7 @@ function WelcomeScreen({ onNext, user, onAuth, onHistory, onSignOut }) {
             <span style={{fontSize:28}}>🏫</span>
             <div>
               <div style={{fontWeight:800,fontSize:15,color:"#c4b5fd"}}>{selected.name}</div>
-              <div style={{fontSize:12,color:"#94a3b8"}}>{selected.city}, Texas</div>
+              <div style={{fontSize:12,color:"#94a3b8"}}>{selected.city ? selected.city + ", " : ""}{stateName(selected.state || "TX")}</div>
             </div>
             <span style={{marginLeft:"auto",fontSize:20}}>✅</span>
           </div>
@@ -373,13 +409,13 @@ function WelcomeScreen({ onNext, user, onAuth, onHistory, onSignOut }) {
         )}
 
         <button
-          onClick={()=>selected && onNext(selected)}
+          onClick={()=>selected && onNext({...selected, state: selected.state || stateCode})}
           style={{...S.primaryBtn,width:"100%",marginTop:20,opacity:selected?1:0.4,cursor:selected?"pointer":"not-allowed"}}>
           Continue to Grade Selection →
         </button>
 
         <p style={{textAlign:"center",color:"#475569",fontSize:12,margin:"14px 0 0"}}>
-          Covering all 1,200+ Texas ISDs · NCES public data
+          School districts nationwide · NCES public data
         </p>
       </div>
     </div>
@@ -403,7 +439,7 @@ function SetupScreen({ isd, onStart, onBack }) {
           <button onClick={onBack} style={{...S.btn,background:"rgba(255,255,255,0.08)",color:"#94a3b8",padding:"8px 16px",fontSize:13}}>← Back</button>
           <div>
             <div style={{fontWeight:800,fontSize:18,color:"#f1f5f9"}}>🏫 {isd.name}</div>
-            <div style={{fontSize:12,color:"#64748b"}}>{isd.city}, Texas</div>
+            <div style={{fontSize:12,color:"#64748b"}}>{isd.city ? isd.city + ", " : ""}{stateName(isd.state || "TX")}</div>
           </div>
         </div>
 
@@ -452,7 +488,7 @@ function SetupScreen({ isd, onStart, onBack }) {
         {/* Question Count */}
         <div style={{...S.card,marginBottom:20}}>
           <h3 style={{margin:"0 0 12px",fontSize:15,fontWeight:800,color:"#fbbf24",textTransform:"uppercase",letterSpacing:1}}>Number of Questions</h3>
-          {(() => { const n = grade && subject && mode ? officialLen(grade, subject, mode) : null; return n ? (
+          {(() => { const n = grade && subject && mode ? officialLen(grade, subject, mode, isd?.state) : null; return n ? (
             <button onClick={()=>setCount(n)}
               style={{...S.btn,width:"100%",marginBottom:10,padding:"14px 8px",fontSize:15,background:count===n?"linear-gradient(135deg,#e11d48,#be123c)":"rgba(225,29,72,0.12)",color:count===n?"#fff":"#fda4af",border:count===n?"none":"1.5px solid rgba(225,29,72,0.45)"}}>
               🎯 Official Test Length — {n} Questions {count===n?"✓":""}
@@ -490,11 +526,12 @@ function PracticeScreen({ isd, config, onFinish, onBack }) {
       const sb = getSupabase();
       if (sb) {
         try {
+          const st = (isd && isd.state) || "TX";
           let { data } = await sb.from("question_bank").select("q,opts,ans,teks,exp")
-            .eq("grade", grade).eq("subject", subject).eq("mode", mode).limit(300);
+            .eq("grade", grade).eq("subject", subject).eq("mode", mode).eq("state", st).limit(300);
           if (!data || data.length < count) {
             const r2 = await sb.from("question_bank").select("q,opts,ans,teks,exp")
-              .eq("grade", grade).eq("subject", subject).limit(300);
+              .eq("grade", grade).eq("subject", subject).eq("state", st).limit(300);
             data = [...(data || []), ...(r2.data || [])];
           }
           if (alive && data && data.length >= count) {
