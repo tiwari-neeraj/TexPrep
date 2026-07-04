@@ -1,0 +1,10 @@
+[
+     {
+       "relation": ["delegate_permission/common.handle_all_urls"],
+       "target": {
+         "namespace": "android_app",
+         "package_name": "app.texprep.twa",
+         "sha256_cert_fingerprints": ["02:B1:E3:4F:08:A8:F8:53:CE:64:1C:E3:4E:18:C1:BD:DB:5B:F9:9B:4F:0E:09:06:B0:52:55:4C:A3:96:67:90"]
+       }
+     }
+   ]
