@@ -33,7 +33,7 @@ export async function saveSession(user, result, isd) {
 }
 
 // ── Sign In / Sign Up ─────────────────────────────────────────────────────
-export function AuthScreen({ onDone, onBack, onForgot }) {
+export function AuthScreen({ onDone, onBack, onForgot, gate }) {
   const [mode, setMode] = useState("signin"); // signin | signup
   const [role, setRole] = useState("student");
   const [name, setName] = useState("");
@@ -76,10 +76,20 @@ export function AuthScreen({ onDone, onBack, onForgot }) {
   return (
     <div style={{ background: bg, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", padding: "20px 16px", fontFamily: "'Nunito',system-ui,sans-serif", color: "#f1f5f9" }}>
       <div style={{ ...card, width: "100%", maxWidth: 420 }}>
-        <button onClick={onBack} style={{ ...btn, background: "rgba(255,255,255,0.08)", color: "#94a3b8", padding: "7px 14px", fontSize: 12, marginBottom: 18 }}>← Back</button>
+        {gate ? (
+          <div style={{ textAlign: "center", marginBottom: 20 }}>
+            <div style={{ width: 64, height: 64, margin: "0 auto 12px", borderRadius: 18, background: "linear-gradient(135deg,#6366f1,#a855f7)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <svg width="38" height="38" viewBox="0 0 24 24" fill="white" aria-hidden="true"><path d="M12 2l2.9 6.26 6.6 1.01-5 4.87 1.18 6.88L12 17.77l-5.68 3.25L7.5 14.14l-5-4.87 6.6-1.01L12 2z"/></svg>
+            </div>
+            <div style={{ fontSize: 28, fontWeight: 900, background: "linear-gradient(135deg,#a78bfa,#60a5fa,#34d399)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>TexPrep</div>
+            <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 4 }}>Texas K–12 Practice · TEKS-Aligned</div>
+          </div>
+        ) : (
+          <button onClick={onBack} style={{ ...btn, background: "rgba(255,255,255,0.08)", color: "#94a3b8", padding: "7px 14px", fontSize: 12, marginBottom: 18 }}>← Back</button>
+        )}
         <h2 style={{ margin: "0 0 4px", fontSize: 24, fontWeight: 900 }}>{mode === "signin" ? "Welcome Back! 👋" : "Create Your Account 🌟"}</h2>
         <p style={{ margin: "0 0 20px", color: "#94a3b8", fontSize: 14 }}>
-          {mode === "signin" ? "Sign in to see your practice history." : "Track your progress and review your mistakes."}
+          {mode === "signin" ? "Sign in to start practicing." : "Sign up free to start practicing and track your progress."}
         </p>
 
         {mode === "signup" && (

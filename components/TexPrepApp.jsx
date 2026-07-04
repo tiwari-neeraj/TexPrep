@@ -61,6 +61,12 @@ function searchISD(query) {
   ).slice(0, 6);
 }
 
+// ── CONFIGURABLE LINKS ───────────────────────────────────────────────────
+// Donate: paste your Buy Me a Coffee / Ko-fi / PayPal.me link here.
+// Feedback: paste your Google Form link here (create a free form at forms.google.com).
+const DONATE_URL = "https://ko-fi.com/texprep";
+const FEEDBACK_URL = "https://docs.google.com/forms/d/e/1FAIpQLSflJ-3w8K6zOAJnwR1U6LJJi1v5J6YECnBazEP2ar73_WrabQ/viewform";
+
 const US_STATES = [
   ["TX","Texas"],["AL","Alabama"],["AK","Alaska"],["AZ","Arizona"],["AR","Arkansas"],["CA","California"],
   ["CO","Colorado"],["CT","Connecticut"],["DE","Delaware"],["DC","Washington DC"],["FL","Florida"],["GA","Georgia"],
@@ -388,7 +394,7 @@ function WelcomeScreen({ onNext, user, onAuth, onHistory, onSignOut }) {
           <svg width="52" height="52" viewBox="0 0 24 24" fill="white" aria-hidden="true"><path d="M12 2l2.9 6.26 6.6 1.01-5 4.87 1.18 6.88L12 17.77l-5.68 3.25L7.5 14.14l-5-4.87 6.6-1.01L12 2z"/></svg>
         </div>
         <h1 style={{margin:0,fontSize:42,fontWeight:900,letterSpacing:-1,background:"linear-gradient(135deg,#a78bfa,#60a5fa,#34d399)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>TexPrep</h1>
-        <p style={{margin:"8px 0 0",color:"#94a3b8",fontSize:17,fontWeight:600}}>K–12 Practice · Texas + All States · Free</p>
+        <p style={{margin:"8px 0 0",color:"#94a3b8",fontSize:17,fontWeight:600}}>Texas K–12 Practice · TEKS-Aligned</p>
         <div style={{display:"flex",gap:8,justifyContent:"center",marginTop:12,flexWrap:"wrap"}}>
           {["TEKS-Aligned","STAAR Prep","MAP Prep","G&T Mode"].map(t=>(
             <span key={t} style={{background:"rgba(99,102,241,0.2)",border:"1px solid rgba(99,102,241,0.4)",borderRadius:20,padding:"4px 12px",fontSize:12,color:"#a78bfa",fontWeight:700}}>{t}</span>
@@ -451,9 +457,24 @@ function WelcomeScreen({ onNext, user, onAuth, onHistory, onSignOut }) {
         </button>
 
         <p style={{textAlign:"center",color:"#475569",fontSize:12,margin:"14px 0 0"}}>
-          School districts nationwide · NCES public data
+          Texas school districts · NCES public data
         </p>
       </div>
+
+      {/* Donate + Feedback links */}
+      <div style={{display:"flex",gap:12,marginTop:20,flexWrap:"wrap",justifyContent:"center"}}>
+        <a href={DONATE_URL} target="_blank" rel="noopener noreferrer"
+          style={{...S.btn,background:"rgba(236,72,153,0.15)",border:"1px solid rgba(236,72,153,0.4)",color:"#f9a8d4",padding:"10px 20px",fontSize:13,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:6}}>
+          ❤️ Support TexPrep
+        </a>
+        <a href={FEEDBACK_URL} target="_blank" rel="noopener noreferrer"
+          style={{...S.btn,background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.4)",color:"#93c5fd",padding:"10px 20px",fontSize:13,textDecoration:"none",display:"inline-flex",alignItems:"center",gap:6}}>
+          💬 Feedback
+        </a>
+      </div>
+      <p style={{textAlign:"center",color:"#475569",fontSize:11,margin:"14px 0 0",maxWidth:420,lineHeight:1.5}}>
+        TexPrep is free while we build. Donations are entirely optional and help keep it running.
+      </p>
     </div>
   );
 }
@@ -832,6 +853,7 @@ export default function App() {
   const [config, setConfig] = useState(null);
   const [result, setResult] = useState(null);
   const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
     const link = document.createElement("link");
@@ -840,11 +862,11 @@ export default function App() {
     document.head.appendChild(link);
   }, []);
 
-  // Track Supabase auth session (no-op when Supabase isn't configured)
+  // Track Supabase auth session
   useEffect(() => {
     const sb = getSupabase();
-    if (!sb) return;
-    sb.auth.getSession().then(({ data }) => setUser(data.session?.user || null));
+    if (!sb) { setAuthLoading(false); return; }
+    sb.auth.getSession().then(({ data }) => { setUser(data.session?.user || null); setAuthLoading(false); });
     const { data: sub } = sb.auth.onAuthStateChange((_e, session) => setUser(session?.user || null));
     return () => sub.subscription.unsubscribe();
   }, []);
@@ -853,11 +875,27 @@ export default function App() {
     const sb = getSupabase();
     if (sb) await sb.auth.signOut();
     setUser(null);
+    setScreen("welcome");
   };
 
+  // While checking the session, show a brief splash (prevents auth-screen flash)
+  if (authLoading) return (
+    <div style={{...S.page,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",minHeight:"100vh",gap:14}}>
+      <div style={{width:72,height:72,borderRadius:20,background:"linear-gradient(135deg,#6366f1,#a855f7)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <svg width="42" height="42" viewBox="0 0 24 24" fill="white" aria-hidden="true"><path d="M12 2l2.9 6.26 6.6 1.01-5 4.87 1.18 6.88L12 17.77l-5.68 3.25L7.5 14.14l-5-4.87 6.6-1.01L12 2z"/></svg>
+      </div>
+      <p style={{color:"#a78bfa",fontWeight:800,fontSize:16,margin:0}}>TexPrep</p>
+    </div>
+  );
+
+  // LOGIN REQUIRED: if not signed in, the only screens available are auth + forgot.
+  if (!user) {
+    if (screen === "forgot") return <ForgotScreen onBack={()=>setScreen("auth")}/>;
+    return <AuthScreen onDone={u=>{setUser(u);setScreen("welcome");}} onBack={()=>setScreen("auth")} onForgot={()=>setScreen("forgot")} gate />;
+  }
+
+  // Signed-in experience
   if (screen === "welcome") return <WelcomeScreen user={user} onAuth={()=>setScreen("auth")} onHistory={()=>setScreen("history")} onSignOut={signOut} onNext={isd=>{setIsd(isd);setScreen("setup");}}/>;
-  if (screen === "auth") return <AuthScreen onDone={u=>{setUser(u);setScreen("welcome");}} onBack={()=>setScreen("welcome")} onForgot={()=>setScreen("forgot")}/>;
-  if (screen === "forgot") return <ForgotScreen onBack={()=>setScreen("auth")}/>;
   if (screen === "history") return <HistoryScreen user={user} onBack={()=>setScreen("welcome")}/>;
   if (screen === "setup") return <SetupScreen isd={isd} onStart={cfg=>{setConfig(cfg);setScreen("practice");}} onBack={()=>setScreen("welcome")}/>;
   if (screen === "practice") return <PracticeScreen isd={isd} config={config} onFinish={res=>{setResult(res);setScreen("results");saveSession(user,res,isd);}} onBack={()=>setScreen("setup")}/>;
