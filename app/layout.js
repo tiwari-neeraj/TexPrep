@@ -1,3 +1,5 @@
+import { Analytics } from "@vercel/analytics/react";
+
 export const metadata = {
   title: "TexPrep — Texas K-12 Practice App",
   description:
@@ -30,6 +32,7 @@ export default function RootLayout({ children }) {
       </head>
       <body style={{ margin: 0, padding: 0 }}>
         {children}
+        <Analytics />
         <script
           dangerouslySetInnerHTML={{
             __html: `
