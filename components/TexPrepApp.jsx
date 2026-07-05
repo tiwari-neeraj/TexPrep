@@ -643,7 +643,7 @@ function PracticeScreen({ isd, config, onFinish, onBack }) {
   useEffect(()=>{
     if (!questions) return;
     timerRef.current = setInterval(()=>setElapsed(e=>e+1),1000);
-    return ()=>clearInterval(timerRef.current);
+    return ()=>{ clearInterval(timerRef.current); stopSpeech(); };
   },[questions]);
 
   const fmt = s => `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
