@@ -1,7 +1,7 @@
 {
   "name": "TexPrep — Texas K-12 Practice",
   "short_name": "TexPrep",
-  "description": "Free TEKS-aligned practice for every Texas ISD. STAAR, MAP, and G&T prep for grades K-12.",
+  "description": "TEKS-aligned practice for every Texas ISD. STAAR, MAP, and G&T prep for grades K-12.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
