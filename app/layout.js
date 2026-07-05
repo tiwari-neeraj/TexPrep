@@ -3,7 +3,7 @@ import { Analytics } from "@vercel/analytics/react";
 export const metadata = {
   title: "TexPrep — Texas K-12 Practice App",
   description:
-    "Free TEKS-aligned practice for every Texas school district. STAAR prep, MAP prep, Gifted & Talented, and daily practice for grades K-12. Find your ISD by city or ZIP code.",
+    "TEKS-aligned practice for every Texas school district. STAAR prep, MAP prep, Gifted & Talented, and daily practice for grades K-12. Find your ISD by city or ZIP code.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
