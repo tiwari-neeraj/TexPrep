@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { getSupabase } from "../lib/supabaseClient";
 import { AuthScreen, ForgotScreen, HistoryScreen, saveSession } from "./AuthScreens";
 import { AdminPanel } from "./AdminPanel";
+import { UpgradeScreen } from "./UpgradeScreen";
+import { isPremium, canStartSession, recordSessionToday, officialLengthRequiresPremium, PAYWALL_ENABLED } from "../lib/premium";
 
 // ── Inline data (ISD + Questions) ──────────────────────────────────────────
 
@@ -345,7 +347,7 @@ const S = {
 // ── Screens ────────────────────────────────────────────────────────────────
 
 // SCREEN 1: Welcome / Location
-function WelcomeScreen({ onNext, user, onAuth, onHistory, onSignOut, onAdmin }) {
+function WelcomeScreen({ onNext, user, premium, onAuth, onHistory, onSignOut, onAdmin, onUpgrade }) {
   const [logoTaps, setLogoTaps] = useState(0);
   const handleLogoTap = () => {
     const n = logoTaps + 1;
@@ -487,7 +489,7 @@ function WelcomeScreen({ onNext, user, onAuth, onHistory, onSignOut, onAdmin }) 
 }
 
 // SCREEN 2: Grade + Subject + Mode
-function SetupScreen({ isd, onStart, onBack }) {
+function SetupScreen({ isd, onStart, onBack, premium, onUpgrade }) {
   const [grade, setGrade] = useState(null);
   const [subject, setSubject] = useState(null);
   const [mode, setMode] = useState(null);
@@ -558,12 +560,16 @@ function SetupScreen({ isd, onStart, onBack }) {
         {/* Question Count */}
         <div style={{...S.card,marginBottom:20}}>
           <h3 style={{margin:"0 0 12px",fontSize:15,fontWeight:800,color:"#fbbf24",textTransform:"uppercase",letterSpacing:1}}>Number of Questions</h3>
-          {(() => { const n = grade && subject && mode ? officialLen(grade, subject, mode, isd?.state) : null; return n ? (
-            <button onClick={()=>setCount(n)}
+          {(() => {
+            const n = grade && subject && mode ? officialLen(grade, subject, mode, isd?.state) : null;
+            if (!n) return null;
+            const locked = officialLengthRequiresPremium({ premium });
+            return (
+            <button onClick={()=> locked ? (onUpgrade && onUpgrade("official_length")) : setCount(n)}
               style={{...S.btn,width:"100%",marginBottom:10,padding:"14px 8px",fontSize:15,background:count===n?"linear-gradient(135deg,#e11d48,#be123c)":"rgba(225,29,72,0.12)",color:count===n?"#fff":"#fda4af",border:count===n?"none":"1.5px solid rgba(225,29,72,0.45)"}}>
-              🎯 Official Test Length — {n} Questions {count===n?"✓":""}
+              🎯 Official Test Length — {n} Questions {locked ? "⭐" : (count===n?"✓":"")}
             </button>
-          ) : null; })()}
+          ); })()}
           <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
             {[5,10,15,20,30].map(n=>(
               <button key={n} onClick={()=>setCount(n)}
@@ -861,6 +867,8 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [premium, setPremium] = useState(false);
+  const [upgradeReason, setUpgradeReason] = useState(null);
 
   useEffect(() => {
     const link = document.createElement("link");
@@ -877,6 +885,14 @@ export default function App() {
     const { data: sub } = sb.auth.onAuthStateChange((_e, session) => setUser(session?.user || null));
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // Load premium status whenever the user changes
+  useEffect(() => {
+    let alive = true;
+    if (!user) { setPremium(false); return; }
+    isPremium(user).then((p) => { if (alive) setPremium(p); });
+    return () => { alive = false; };
+  }, [user]);
 
   const signOut = async () => {
     const sb = getSupabase();
@@ -903,9 +919,16 @@ export default function App() {
 
   // Signed-in experience
   if (screen === "admin") return <AdminPanel onBack={()=>setScreen("welcome")} />;
-  if (screen === "welcome") return <WelcomeScreen user={user} onAuth={()=>setScreen("auth")} onHistory={()=>setScreen("history")} onSignOut={signOut} onAdmin={()=>setScreen("admin")} onNext={isd=>{setIsd(isd);setScreen("setup");}}/>;
+  if (screen === "upgrade") return <UpgradeScreen reason={upgradeReason} user={user} onBack={()=>setScreen("welcome")} onDismiss={()=>setScreen("welcome")} />;
+  if (screen === "welcome") return <WelcomeScreen user={user} premium={premium} onAuth={()=>setScreen("auth")} onHistory={()=>setScreen("history")} onSignOut={signOut} onAdmin={()=>setScreen("admin")} onUpgrade={()=>{setUpgradeReason("generic");setScreen("upgrade");}} onNext={isd=>{setIsd(isd);setScreen("setup");}}/>;
   if (screen === "history") return <HistoryScreen user={user} onBack={()=>setScreen("welcome")}/>;
-  if (screen === "setup") return <SetupScreen isd={isd} onStart={cfg=>{setConfig(cfg);setScreen("practice");}} onBack={()=>setScreen("welcome")}/>;
+  if (screen === "setup") return <SetupScreen isd={isd} premium={premium} onStart={cfg=>{
+    // Freemium check: gate session start only when paywall is on and limit reached
+    const check = canStartSession({ premium });
+    if (!check.allowed) { setUpgradeReason(check.reason); setScreen("upgrade"); return; }
+    recordSessionToday();
+    setConfig(cfg); setScreen("practice");
+  }} onUpgrade={(reason)=>{setUpgradeReason(reason||"generic");setScreen("upgrade");}} onBack={()=>setScreen("welcome")}/>;
   if (screen === "practice") return <PracticeScreen isd={isd} config={config} onFinish={res=>{setResult(res);setScreen("results");saveSession(user,res,isd);}} onBack={()=>setScreen("setup")}/>;
   if (screen === "results") return <ResultsScreen result={result} isd={isd} onRestart={()=>setScreen("practice")} onNewSession={()=>setScreen("setup")}/>;
   return null;
