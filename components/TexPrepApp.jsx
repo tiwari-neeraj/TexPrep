@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getSupabase } from "../lib/supabaseClient";
 import { AuthScreen, ForgotScreen, HistoryScreen, saveSession } from "./AuthScreens";
+import { AdminPanel } from "./AdminPanel";
 
 // ── Inline data (ISD + Questions) ──────────────────────────────────────────
 
@@ -344,7 +345,13 @@ const S = {
 // ── Screens ────────────────────────────────────────────────────────────────
 
 // SCREEN 1: Welcome / Location
-function WelcomeScreen({ onNext, user, onAuth, onHistory, onSignOut }) {
+function WelcomeScreen({ onNext, user, onAuth, onHistory, onSignOut, onAdmin }) {
+  const [logoTaps, setLogoTaps] = useState(0);
+  const handleLogoTap = () => {
+    const n = logoTaps + 1;
+    setLogoTaps(n);
+    if (n >= 5) { setLogoTaps(0); onAdmin && onAdmin(); }
+  };
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -390,7 +397,7 @@ function WelcomeScreen({ onNext, user, onAuth, onHistory, onSignOut }) {
       </div>
       {/* Logo */}
       <div style={{textAlign:"center",marginBottom:36}}>
-        <div style={{width:88,height:88,margin:"0 auto 14px",borderRadius:26,background:"linear-gradient(135deg,#6366f1 0%,#a855f7 55%,#ec4899 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 10px 36px rgba(139,92,246,0.45)"}}>
+        <div onClick={handleLogoTap} style={{width:88,height:88,margin:"0 auto 14px",borderRadius:26,background:"linear-gradient(135deg,#6366f1 0%,#a855f7 55%,#ec4899 100%)",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 10px 36px rgba(139,92,246,0.45)",cursor:"default",userSelect:"none"}}>
           <svg width="52" height="52" viewBox="0 0 24 24" fill="white" aria-hidden="true"><path d="M12 2l2.9 6.26 6.6 1.01-5 4.87 1.18 6.88L12 17.77l-5.68 3.25L7.5 14.14l-5-4.87 6.6-1.01L12 2z"/></svg>
         </div>
         <h1 style={{margin:0,fontSize:42,fontWeight:900,letterSpacing:-1,background:"linear-gradient(135deg,#a78bfa,#60a5fa,#34d399)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>TexPrep</h1>
@@ -895,7 +902,8 @@ export default function App() {
   }
 
   // Signed-in experience
-  if (screen === "welcome") return <WelcomeScreen user={user} onAuth={()=>setScreen("auth")} onHistory={()=>setScreen("history")} onSignOut={signOut} onNext={isd=>{setIsd(isd);setScreen("setup");}}/>;
+  if (screen === "admin") return <AdminPanel onBack={()=>setScreen("welcome")} />;
+  if (screen === "welcome") return <WelcomeScreen user={user} onAuth={()=>setScreen("auth")} onHistory={()=>setScreen("history")} onSignOut={signOut} onAdmin={()=>setScreen("admin")} onNext={isd=>{setIsd(isd);setScreen("setup");}}/>;
   if (screen === "history") return <HistoryScreen user={user} onBack={()=>setScreen("welcome")}/>;
   if (screen === "setup") return <SetupScreen isd={isd} onStart={cfg=>{setConfig(cfg);setScreen("practice");}} onBack={()=>setScreen("welcome")}/>;
   if (screen === "practice") return <PracticeScreen isd={isd} config={config} onFinish={res=>{setResult(res);setScreen("results");saveSession(user,res,isd);}} onBack={()=>setScreen("setup")}/>;
